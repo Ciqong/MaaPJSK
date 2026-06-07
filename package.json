@@ -1,0 +1,10 @@
+{
+  "name": "maa-pjsk",
+  "private": true,
+  "devDependencies": {
+    "@nekosu/maa-tools": "1.0.23",
+    "@nekosu/prettier-plugin-maafw-sort": "^1.0.5",
+    "@types/node": "^25.5.2",
+    "prettier-plugin-multiline-arrays": "^3.0.6"
+  }
+}

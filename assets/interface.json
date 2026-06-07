@@ -1,0 +1,78 @@
+{
+    "interface_version": 2,
+    "name": "MaaPJSK",
+    "description": "基于 MaaFramework 的世界计划主线剧情自动阅读助手。",
+    "contact": "https://github.com/Ciqong/MaaPJSK",
+    "license": "MIT",
+    "welcome": "请先进入游戏主页，并确认模拟器为横屏显示。",
+    "github": "https://github.com/Ciqong/MaaPJSK",
+    "version": "0.1.0",
+    "controller": [
+        {
+            "name": "安卓端",
+            "type": "Adb",
+            "display_short_side": 720
+        }
+    ],
+    "resource": [
+        {
+            "name": "通用 720p 逻辑资源",
+            "path": [
+                "./resource"
+            ]
+        }
+    ],
+    "agent": {
+        "child_exec": "python",
+        "child_args": [
+            "-u",
+            "./agent/main.py"
+        ]
+    },
+    "task": [
+        {
+            "name": "自动阅读主线剧情",
+            "entry": "RunStoryHelper",
+            "option": [
+                "阅读行为"
+            ]
+        }
+    ],
+    "option": {
+        "阅读行为": {
+            "type": "select",
+            "cases": [
+                {
+                    "name": "默认速度",
+                    "pipeline_override": {
+                        "FindAndReadNextUnreadStory": {
+                            "custom_action_param": {
+                                "reading_click_interval": 0.35,
+                                "reading_check_interval": 2.0,
+                                "min_reading_seconds": 8.0,
+                                "max_reading_seconds": 900.0,
+                                "return_diff_threshold": 0.08,
+                                "required_stable_hits": 2
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "慢速稳定",
+                    "pipeline_override": {
+                        "FindAndReadNextUnreadStory": {
+                            "custom_action_param": {
+                                "reading_click_interval": 0.55,
+                                "reading_check_interval": 3.0,
+                                "min_reading_seconds": 12.0,
+                                "max_reading_seconds": 1200.0,
+                                "return_diff_threshold": 0.08,
+                                "required_stable_hits": 3
+                            }
+                        }
+                    }
+                }
+            ]
+        }
+    }
+}

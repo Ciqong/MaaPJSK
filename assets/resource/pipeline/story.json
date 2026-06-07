@@ -1,0 +1,276 @@
+{
+    "RunStoryHelper": {
+        "timeout": -1,
+        "rate_limit": 600,
+        "next": [
+            "[JumpBack]HandleNetworkError",
+            "[JumpBack]HandleDownloadButton",
+            "[JumpBack]OpenStoryFromMainPage",
+            "[JumpBack]OpenMainStoryPage",
+            "[JumpBack]SetUnreadStoryFilter",
+            "[JumpBack]ContinueStoryListAndRead",
+            "[JumpBack]OpenStoryListAndRead"
+        ]
+    },
+
+    "HandleNetworkError": {
+        "recognition": "TemplateMatch",
+        "template": "network_error_retryable.png",
+        "roi": [360, 250, 560, 220],
+        "threshold": 0.86,
+        "action": "Click",
+        "target": [762, 424],
+        "post_delay": 2000
+    },
+
+    "HandleDownloadButton": {
+        "recognition": "TemplateMatch",
+        "template": "download_button.png",
+        "roi": [650, 440, 500, 180],
+        "threshold": 0.82,
+        "action": "Click",
+        "target": true,
+        "post_delay": 2500
+    },
+
+    "OpenStoryFromMainPage": {
+        "recognition": "TemplateMatch",
+        "template": "main_page_story_btn.png",
+        "roi": [-460, -130, 420, 130],
+        "threshold": 0.55,
+        "action": "Click",
+        "target": true,
+        "post_delay": 1200
+    },
+
+    "OpenMainStoryPage": {
+        "recognition": "TemplateMatch",
+        "template": "main_story_btn.png",
+        "roi": [120, 100, 950, 340],
+        "threshold": 0.82,
+        "action": "Click",
+        "target": true,
+        "post_delay": 1200
+    },
+
+    "SetUnreadStoryFilter": {
+        "recognition": "TemplateMatch",
+        "template": "filter_button.png",
+        "roi": [-500, 0, 420, 90],
+        "threshold": 0.78,
+        "max_hit": 1,
+        "action": "Custom",
+        "custom_action": "set_unread_story_filter",
+        "custom_action_param": {
+            "filter_option_ratio": [0.521, 0.333],
+            "filter_confirm_ratio": [0.594, 0.907],
+            "click_delay": 0.8
+        },
+        "post_delay": 1200
+    },
+
+    "OpenStoryListAndRead": {
+        "recognition": "TemplateMatch",
+        "template": "story_home_confirm.png",
+        "roi": [-470, -120, 420, 120],
+        "threshold": 0.78,
+        "action": "Click",
+        "target": true,
+        "post_delay": 1000,
+        "next": [
+            "FindAndReadNextUnreadStory"
+        ]
+    },
+
+    "ContinueStoryListAndRead": {
+        "recognition": "TemplateMatch",
+        "template": "skip_badge.png",
+        "roi": [-430, 120, 370, 570],
+        "threshold": 0.78,
+        "action": "DoNothing",
+        "post_delay": 200,
+        "next": [
+            "FindAndReadNextUnreadStory"
+        ]
+    },
+
+    "ScrollStoryListToBottom": {
+        "action": "Swipe",
+        "begin": [933, 633],
+        "end": [933, 20],
+        "duration": 120,
+        "repeat": 3,
+        "repeat_delay": 150,
+        "post_delay": 800,
+        "next": [
+            "FindAndReadNextUnreadStory"
+        ]
+    },
+
+    "FindAndReadNextUnreadStory": {
+        "action": "Custom",
+        "custom_action": "find_and_read_next_unread_story",
+        "custom_action_param": {
+            "story_row_points": [
+                [907, 623],
+                [907, 510],
+                [907, 397],
+                [907, 284],
+                [907, 171]
+            ],
+            "skip_badge_nodes": [
+                "FlagSkipBadgeRowBottom",
+                "FlagSkipBadgeRowSecond",
+                "FlagSkipBadgeRowThird",
+                "FlagSkipBadgeRowFourth",
+                "FlagSkipBadgeRowFifth"
+            ],
+            "unread_badge_nodes": [
+                "FlagUnreadBadgeRowBottom",
+                "FlagUnreadBadgeRowSecond",
+                "FlagUnreadBadgeRowThird",
+                "FlagUnreadBadgeRowFourth",
+                "FlagUnreadBadgeRowFifth"
+            ],
+            "start_button_node": "FlagStartButton",
+            "no_voice_button_node": "FlagNoVoiceButton",
+            "next_story_checkbox_node": "FlagNextStoryCheckboxUnchecked",
+            "network_error_node": "FlagNetworkError",
+            "download_button_node": "FlagDownloadButton",
+            "continuous_read_point": [494, 475],
+            "no_voice_point": [633, 540],
+            "reading_click_point": [185, 352],
+            "network_retry_point": [762, 424],
+            "download_click_point": [785, 546],
+            "story_list_scroll_roi": [760, 160, 620, 500],
+            "story_list_scroll_begin": [1070, 630],
+            "story_list_scroll_end": [1070, 210],
+            "story_list_scroll_duration": 220,
+            "story_list_scroll_delay": 0.55,
+            "story_list_scroll_max": 12,
+            "story_list_scroll_stable_threshold": 0.015,
+            "story_list_scroll_stable_hits": 2,
+            "next_story_checkbox_wait": 0.3,
+            "story_start_wait": 5.0,
+            "row_click_wait": 0.8,
+            "reading_click_interval": 0.35,
+            "reading_check_interval": 2.0,
+            "min_reading_seconds": 8.0,
+            "max_reading_seconds": 900.0,
+            "return_diff_threshold": 0.08,
+            "required_stable_hits": 2
+        },
+        "on_error": [
+            "StopNoUnreadStory"
+        ]
+    },
+
+    "StopNoUnreadStory": {
+        "action": "StopTask"
+    },
+
+    "FlagStartButton": {
+        "recognition": "TemplateMatch",
+        "template": "start_btn.png",
+        "roi": [0, 450, 0, 220],
+        "threshold": 0.74
+    },
+
+    "FlagNoVoiceButton": {
+        "recognition": "TemplateMatch",
+        "template": "no_voice_button.png",
+        "roi": [600, 480, 520, 120],
+        "threshold": 0.82
+    },
+
+    "FlagNextStoryCheckboxUnchecked": {
+        "recognition": "TemplateMatch",
+        "template": "next_story_checkbox_unchecked.png",
+        "roi": [560, 430, 180, 120],
+        "threshold": 0.82
+    },
+
+    "FlagSkipBadgeRowBottom": {
+        "recognition": "TemplateMatch",
+        "template": "skip_badge.png",
+        "roi": [-390, 565, 330, 120],
+        "threshold": 0.78
+    },
+
+    "FlagSkipBadgeRowSecond": {
+        "recognition": "TemplateMatch",
+        "template": "skip_badge.png",
+        "roi": [-390, 450, 330, 125],
+        "threshold": 0.78
+    },
+
+    "FlagSkipBadgeRowThird": {
+        "recognition": "TemplateMatch",
+        "template": "skip_badge.png",
+        "roi": [-390, 340, 330, 125],
+        "threshold": 0.78
+    },
+
+    "FlagSkipBadgeRowFourth": {
+        "recognition": "TemplateMatch",
+        "template": "skip_badge.png",
+        "roi": [-390, 225, 330, 125],
+        "threshold": 0.78
+    },
+
+    "FlagSkipBadgeRowFifth": {
+        "recognition": "TemplateMatch",
+        "template": "skip_badge.png",
+        "roi": [-390, 110, 330, 125],
+        "threshold": 0.78
+    },
+
+    "FlagUnreadBadgeRowBottom": {
+        "recognition": "TemplateMatch",
+        "template": "unread_badge.png",
+        "roi": [-190, 565, 150, 120],
+        "threshold": 0.76
+    },
+
+    "FlagUnreadBadgeRowSecond": {
+        "recognition": "TemplateMatch",
+        "template": "unread_badge.png",
+        "roi": [-190, 450, 150, 125],
+        "threshold": 0.76
+    },
+
+    "FlagUnreadBadgeRowThird": {
+        "recognition": "TemplateMatch",
+        "template": "unread_badge.png",
+        "roi": [-190, 340, 150, 125],
+        "threshold": 0.76
+    },
+
+    "FlagUnreadBadgeRowFourth": {
+        "recognition": "TemplateMatch",
+        "template": "unread_badge.png",
+        "roi": [-190, 225, 150, 125],
+        "threshold": 0.76
+    },
+
+    "FlagUnreadBadgeRowFifth": {
+        "recognition": "TemplateMatch",
+        "template": "unread_badge.png",
+        "roi": [-190, 110, 150, 125],
+        "threshold": 0.76
+    },
+
+    "FlagNetworkError": {
+        "recognition": "TemplateMatch",
+        "template": "network_error_retryable.png",
+        "roi": [360, 250, 560, 220],
+        "threshold": 0.86
+    },
+
+    "FlagDownloadButton": {
+        "recognition": "TemplateMatch",
+        "template": "download_button.png",
+        "roi": [650, 440, 500, 180],
+        "threshold": 0.82
+    }
+}
