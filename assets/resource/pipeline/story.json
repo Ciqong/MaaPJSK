@@ -181,6 +181,9 @@
             "return_diff_threshold": 0.08,
             "required_stable_hits": 2
         },
+        "next": [
+            "FindAndReadNextUnreadStory"
+        ],
         "on_error": [
             "StopNoUnreadStory"
         ]
