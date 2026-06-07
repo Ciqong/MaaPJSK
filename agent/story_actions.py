@@ -34,6 +34,11 @@ DEFAULT_PARAM: Dict[str, Any] = {
         "FlagUnreadBadgeRowFourth",
         "FlagUnreadBadgeRowFifth",
     ],
+    "story_list_marker_nodes": [
+        "FlagStoryInfoButtonAny",
+        "FlagSkipBadgeAny",
+        "FlagUnreadBadgeAny",
+    ],
     "start_button_node": "FlagStartButton",
     "no_voice_button_node": "FlagNoVoiceButton",
     "next_story_checkbox_node": "FlagNextStoryCheckboxUnchecked",
@@ -62,6 +67,9 @@ DEFAULT_PARAM: Dict[str, Any] = {
     "story_list_scroll_stable_threshold": 0.015,
     "story_list_scroll_stable_hits": 2,
     "next_story_checkbox_wait": 0.3,
+    "skip_color_roi": [-285, -48, 100, 38],
+    "skip_color_min_pixels": 1200,
+    "skip_text_min_pixels": 250,
 }
 
 
@@ -142,6 +150,67 @@ def _crop(image: np.ndarray, roi: Sequence[int]) -> np.ndarray:
     return image[top:bottom, left:right]
 
 
+def _row_relative_crop(
+    image: np.ndarray,
+    row_point: Sequence[int],
+    roi: Sequence[int],
+) -> np.ndarray:
+    x_offset, y_offset, width, height = [int(v) for v in roi]
+    img_h, img_w = image.shape[:2]
+    row_x, row_y = _as_point(row_point)
+
+    x = img_w + x_offset if x_offset < 0 else row_x + x_offset
+    y = row_y + y_offset
+
+    left = max(0, min(x, img_w - 1))
+    top = max(0, min(y, img_h - 1))
+    right = max(left + 1, min(left + max(1, width), img_w))
+    bottom = max(top + 1, min(top + max(1, height), img_h))
+    return image[top:bottom, left:right]
+
+
+def _count_skip_marker_pixels(crop: np.ndarray) -> Tuple[int, int]:
+    if crop.ndim < 3 or crop.shape[2] < 3:
+        return 0, 0
+
+    pixels = crop[..., :3].astype(np.int16)
+
+    def make_cyan_mask(red: np.ndarray, green: np.ndarray, blue: np.ndarray) -> np.ndarray:
+        return (
+            (red >= 70)
+            & (red <= 200)
+            & (green >= 155)
+            & (green <= 255)
+            & (blue >= 155)
+            & (blue <= 255)
+            & ((green - red) >= 25)
+            & ((blue - red) >= 25)
+            & (np.abs(green - blue) <= 80)
+        )
+
+    def make_text_mask(red: np.ndarray, green: np.ndarray, blue: np.ndarray) -> np.ndarray:
+        return (
+            (red >= 45)
+            & (red <= 130)
+            & (green >= 45)
+            & (green <= 130)
+            & (blue >= 75)
+            & (blue <= 180)
+            & ((blue - red) >= 15)
+            & ((blue - green) >= 10)
+        )
+
+    first, second, third = pixels[..., 0], pixels[..., 1], pixels[..., 2]
+    rgb_cyan_mask = make_cyan_mask(first, second, third)
+    bgr_cyan_mask = make_cyan_mask(third, second, first)
+    rgb_text_mask = make_text_mask(first, second, third)
+    bgr_text_mask = make_text_mask(third, second, first)
+    return (
+        int(np.count_nonzero(rgb_cyan_mask | bgr_cyan_mask)),
+        int(np.count_nonzero(rgb_text_mask | bgr_text_mask)),
+    )
+
+
 def _mean_abs_diff(left: np.ndarray, right: np.ndarray) -> float:
     height = min(left.shape[0], right.shape[0])
     width = min(left.shape[1], right.shape[1])
@@ -217,6 +286,31 @@ def _row_has_marker_node(
     return False
 
 
+def _row_has_skip_color_marker(
+    image: np.ndarray,
+    param: Dict[str, Any],
+    row_index: int,
+    quiet: bool = False,
+) -> bool:
+    row_points = param.get("story_row_points") or []
+    if row_index >= len(row_points):
+        return False
+
+    crop = _row_relative_crop(image, row_points[row_index], param["skip_color_roi"])
+    cyan_pixels, text_pixels = _count_skip_marker_pixels(crop)
+    if cyan_pixels < int(param["skip_color_min_pixels"]) or text_pixels < int(
+        param["skip_text_min_pixels"]
+    ):
+        return False
+
+    if not quiet:
+        print(
+            "SKIP color marker found on visible row "
+            f"#{row_index + 1} ({cyan_pixels} cyan, {text_pixels} text pixels)."
+        )
+    return True
+
+
 def _row_has_readable_marker(
     context: Context,
     image: np.ndarray,
@@ -228,10 +322,29 @@ def _row_has_readable_marker(
 
     if _row_has_marker_node(context, image, skip_badge_nodes, row_index, "SKIP"):
         return True
+    if _row_has_skip_color_marker(image, param, row_index):
+        return True
     if _row_has_marker_node(context, image, unread_badge_nodes, row_index, "Unread"):
         return True
 
     print(f"No SKIP/unread marker found on visible row #{row_index + 1}; skipping row.")
+    return False
+
+
+def _is_story_list_visible(context: Context, image: np.ndarray, param: Dict[str, Any]) -> bool:
+    for raw_node in param.get("story_list_marker_nodes") or []:
+        node = str(raw_node)
+        if not node:
+            continue
+        if _recognize(context, node, image):
+            print(f"Story list marker matched: {node}.")
+            return True
+
+    for row_index in range(len(param.get("story_row_points") or [])):
+        if _row_has_skip_color_marker(image, param, row_index, quiet=True):
+            print("Story list marker matched by SKIP color.")
+            return True
+
     return False
 
 
@@ -387,11 +500,17 @@ def _read_until_story_list_returns(
             diff = _mean_abs_diff(baseline, current)
             print(f"Story list return diff: {diff:.4f}")
 
-            if elapsed >= float(param["min_reading_seconds"]) and diff <= float(
-                param["return_diff_threshold"]
+            list_visible = elapsed >= float(
+                param["min_reading_seconds"]
+            ) and _is_story_list_visible(context, image, param)
+
+            if elapsed >= float(param["min_reading_seconds"]) and (
+                list_visible or diff <= float(param["return_diff_threshold"])
             ):
                 stable_hits += 1
                 if stable_hits >= int(param["required_stable_hits"]):
+                    if list_visible:
+                        print("Story list returned; continuing with the next readable row.")
                     return True
             else:
                 stable_hits = 0

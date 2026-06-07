@@ -9,6 +9,7 @@
             "[JumpBack]OpenMainStoryPage",
             "[JumpBack]SetUnreadStoryFilter",
             "[JumpBack]ContinueStoryListAndRead",
+            "[JumpBack]ContinueStoryListAndReadInfoButton",
             "[JumpBack]OpenStoryListAndRead"
         ]
     },
@@ -85,8 +86,20 @@
     "ContinueStoryListAndRead": {
         "recognition": "TemplateMatch",
         "template": "skip_badge.png",
-        "roi": [-430, 120, 370, 570],
-        "threshold": 0.78,
+        "roi": [-430, 120, 410, 570],
+        "threshold": 0.70,
+        "action": "DoNothing",
+        "post_delay": 200,
+        "next": [
+            "FindAndReadNextUnreadStory"
+        ]
+    },
+
+    "ContinueStoryListAndReadInfoButton": {
+        "recognition": "TemplateMatch",
+        "template": "story_info_button.png",
+        "roi": [-280, 130, 260, 560],
+        "threshold": 0.80,
         "action": "DoNothing",
         "post_delay": 200,
         "next": [
@@ -132,6 +145,11 @@
                 "FlagUnreadBadgeRowFourth",
                 "FlagUnreadBadgeRowFifth"
             ],
+            "story_list_marker_nodes": [
+                "FlagStoryInfoButtonAny",
+                "FlagSkipBadgeAny",
+                "FlagUnreadBadgeAny"
+            ],
             "start_button_node": "FlagStartButton",
             "no_voice_button_node": "FlagNoVoiceButton",
             "next_story_checkbox_node": "FlagNextStoryCheckboxUnchecked",
@@ -150,6 +168,9 @@
             "story_list_scroll_max": 12,
             "story_list_scroll_stable_threshold": 0.015,
             "story_list_scroll_stable_hits": 2,
+            "skip_color_roi": [-285, -48, 100, 38],
+            "skip_color_min_pixels": 1200,
+            "skip_text_min_pixels": 250,
             "next_story_checkbox_wait": 0.3,
             "story_start_wait": 5.0,
             "row_click_wait": 0.8,
@@ -190,39 +211,60 @@
         "threshold": 0.82
     },
 
+    "FlagSkipBadgeAny": {
+        "recognition": "TemplateMatch",
+        "template": "skip_badge.png",
+        "roi": [-430, 120, 410, 570],
+        "threshold": 0.70
+    },
+
+    "FlagUnreadBadgeAny": {
+        "recognition": "TemplateMatch",
+        "template": "unread_badge.png",
+        "roi": [-250, 100, 230, 600],
+        "threshold": 0.74
+    },
+
+    "FlagStoryInfoButtonAny": {
+        "recognition": "TemplateMatch",
+        "template": "story_info_button.png",
+        "roi": [-280, 130, 260, 560],
+        "threshold": 0.80
+    },
+
     "FlagSkipBadgeRowBottom": {
         "recognition": "TemplateMatch",
         "template": "skip_badge.png",
         "roi": [-390, 565, 330, 120],
-        "threshold": 0.78
+        "threshold": 0.70
     },
 
     "FlagSkipBadgeRowSecond": {
         "recognition": "TemplateMatch",
         "template": "skip_badge.png",
         "roi": [-390, 450, 330, 125],
-        "threshold": 0.78
+        "threshold": 0.70
     },
 
     "FlagSkipBadgeRowThird": {
         "recognition": "TemplateMatch",
         "template": "skip_badge.png",
         "roi": [-390, 340, 330, 125],
-        "threshold": 0.78
+        "threshold": 0.70
     },
 
     "FlagSkipBadgeRowFourth": {
         "recognition": "TemplateMatch",
         "template": "skip_badge.png",
         "roi": [-390, 225, 330, 125],
-        "threshold": 0.78
+        "threshold": 0.70
     },
 
     "FlagSkipBadgeRowFifth": {
         "recognition": "TemplateMatch",
         "template": "skip_badge.png",
         "roi": [-390, 110, 330, 125],
-        "threshold": 0.78
+        "threshold": 0.70
     },
 
     "FlagUnreadBadgeRowBottom": {

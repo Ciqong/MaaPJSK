@@ -2,6 +2,7 @@
     "interface_version": 2,
     "name": "MaaPJSK",
     "description": "基于 MaaFramework 的世界计划主线剧情自动阅读助手。",
+    "icon": "resource/icon.png",
     "contact": "https://github.com/Ciqong/MaaPJSK",
     "license": "MIT",
     "welcome": "请先进入游戏主页，并确认模拟器为横屏显示。",
