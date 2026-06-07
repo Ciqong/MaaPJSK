@@ -42,6 +42,7 @@ DEFAULT_PARAM: Dict[str, Any] = {
     "start_button_node": "FlagStartButton",
     "no_voice_button_node": "FlagNoVoiceButton",
     "next_story_checkbox_node": "FlagNextStoryCheckboxUnchecked",
+    "next_story_checkbox_checked_node": "FlagNextStoryCheckboxChecked",
     "network_error_node": "FlagNetworkError",
     "download_button_node": "FlagDownloadButton",
     "continuous_read_point": [494, 475],
@@ -67,6 +68,7 @@ DEFAULT_PARAM: Dict[str, Any] = {
     "story_list_scroll_stable_threshold": 0.015,
     "story_list_scroll_stable_hits": 2,
     "next_story_checkbox_wait": 0.3,
+    "next_story_auto_read_min_markers": 2,
     "skip_color_roi": [-285, -48, 100, 38],
     "skip_color_min_pixels": 1200,
     "skip_text_min_pixels": 250,
@@ -243,23 +245,32 @@ def _handle_interruptions(context: Context, image: np.ndarray, param: Dict[str, 
     return False
 
 
-def _try_enable_next_story_auto_read(context: Context, param: Dict[str, Any]) -> bool:
-    checkbox_node = str(param.get("next_story_checkbox_node", ""))
-    if not checkbox_node:
+def _set_next_story_auto_read(
+    context: Context,
+    param: Dict[str, Any],
+    enabled: bool,
+) -> bool:
+    unchecked_node = str(param.get("next_story_checkbox_node", ""))
+    checked_node = str(param.get("next_story_checkbox_checked_node", ""))
+    target_node = unchecked_node if enabled else checked_node
+    if not target_node:
         return False
 
     image = _screencap(context)
     if _handle_interruptions(context, image, param):
         return False
 
-    checkbox_hit = _recognize(context, checkbox_node, image)
+    checkbox_hit = _recognize(context, target_node, image)
     if not checkbox_hit or not checkbox_hit.box:
+        state = "enabled" if enabled else "disabled"
+        print(f"Next-story auto read is already {state} or checkbox is not visible.")
         return False
 
     if not _click_box_center(context, checkbox_hit.box):
         return False
 
-    print("Enabled next-story auto read.")
+    state = "Enabled" if enabled else "Disabled"
+    print(f"{state} next-story auto read.")
     time.sleep(float(param["next_story_checkbox_wait"]))
     return True
 
@@ -270,6 +281,7 @@ def _row_has_marker_node(
     nodes: Sequence[str],
     row_index: int,
     label: str,
+    quiet: bool = False,
 ) -> bool:
     if row_index >= len(nodes):
         return False
@@ -280,7 +292,8 @@ def _row_has_marker_node(
 
     hit = _recognize(context, node, image)
     if hit:
-        print(f"{label} marker found on visible row #{row_index + 1}.")
+        if not quiet:
+            print(f"{label} marker found on visible row #{row_index + 1}.")
         return True
 
     return False
@@ -316,19 +329,36 @@ def _row_has_readable_marker(
     image: np.ndarray,
     param: Dict[str, Any],
     row_index: int,
+    quiet: bool = False,
 ) -> bool:
     skip_badge_nodes = param.get("skip_badge_nodes") or []
     unread_badge_nodes = param.get("unread_badge_nodes") or []
 
-    if _row_has_marker_node(context, image, skip_badge_nodes, row_index, "SKIP"):
+    if _row_has_marker_node(context, image, skip_badge_nodes, row_index, "SKIP", quiet):
         return True
-    if _row_has_skip_color_marker(image, param, row_index):
+    if _row_has_skip_color_marker(image, param, row_index, quiet):
         return True
-    if _row_has_marker_node(context, image, unread_badge_nodes, row_index, "Unread"):
+    if _row_has_marker_node(context, image, unread_badge_nodes, row_index, "Unread", quiet):
         return True
 
-    print(f"No SKIP/unread marker found on visible row #{row_index + 1}; skipping row.")
+    if not quiet:
+        print(f"No SKIP/unread marker found on visible row #{row_index + 1}; skipping row.")
     return False
+
+
+def _find_readable_row_indexes(
+    context: Context,
+    image: np.ndarray,
+    param: Dict[str, Any],
+) -> list[int]:
+    readable_rows = []
+    row_count = len(param.get("story_row_points") or [])
+    for row_index in range(row_count):
+        if _row_has_readable_marker(context, image, param, row_index, quiet=True):
+            readable_rows.append(row_index)
+
+    print(f"Readable story markers on current page: {len(readable_rows)}.")
+    return readable_rows
 
 
 def _is_story_list_visible(context: Context, image: np.ndarray, param: Dict[str, Any]) -> bool:
@@ -428,7 +458,12 @@ def _find_story_start_after_row_click(
     return None
 
 
-def _start_reading(context: Context, start_box: Box, param: Dict[str, Any]) -> bool:
+def _start_reading(
+    context: Context,
+    start_box: Box,
+    param: Dict[str, Any],
+    enable_next_story_auto_read: bool,
+) -> bool:
     if not _click_box_center(context, start_box):
         return False
 
@@ -442,7 +477,7 @@ def _start_reading(context: Context, start_box: Box, param: Dict[str, Any]) -> b
     image = _screencap(context)
     _handle_interruptions(context, image, param)
 
-    _try_enable_next_story_auto_read(context, param)
+    _set_next_story_auto_read(context, param, enable_next_story_auto_read)
 
     _click(context, param["no_voice_point"])
     time.sleep(float(param["story_start_wait"]))
@@ -454,15 +489,16 @@ def _start_reading_from_row(
     start_kind: str,
     start_box: Box,
     param: Dict[str, Any],
+    enable_next_story_auto_read: bool,
 ) -> bool:
     if start_kind == "no_voice":
-        _try_enable_next_story_auto_read(context, param)
+        _set_next_story_auto_read(context, param, enable_next_story_auto_read)
         if not _click_box_center(context, start_box):
             return False
         time.sleep(float(param["story_start_wait"]))
         return True
 
-    return _start_reading(context, start_box, param)
+    return _start_reading(context, start_box, param, enable_next_story_auto_read)
 
 
 def _read_until_story_list_returns(
@@ -525,9 +561,20 @@ class FindAndReadNextUnreadStory(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         param = _load_param(argv.custom_action_param)
         story_list_baseline = _scroll_story_list_to_bottom(context, param)
+        readable_row_indexes = _find_readable_row_indexes(context, story_list_baseline, param)
+        readable_row_set = set(readable_row_indexes)
+        enable_next_story_auto_read = len(readable_row_indexes) >= int(
+            param["next_story_auto_read_min_markers"]
+        )
+
+        if enable_next_story_auto_read:
+            print("Next-story auto read will be enabled; multiple readable stories remain.")
+        else:
+            print("Next-story auto read will stay disabled; only one readable story remains.")
 
         for row_index, row_point in enumerate(param["story_row_points"]):
-            if not _row_has_readable_marker(context, story_list_baseline, param, row_index):
+            if row_index not in readable_row_set:
+                print(f"No SKIP/unread marker found on visible row #{row_index + 1}; skipping row.")
                 continue
 
             _click(context, row_point)
@@ -538,7 +585,13 @@ class FindAndReadNextUnreadStory(CustomAction):
                 continue
 
             start_kind, start_box = start_target
-            if not _start_reading_from_row(context, start_kind, start_box, param):
+            if not _start_reading_from_row(
+                context,
+                start_kind,
+                start_box,
+                param,
+                enable_next_story_auto_read,
+            ):
                 return False
 
             return _read_until_story_list_returns(context, story_list_baseline, param)

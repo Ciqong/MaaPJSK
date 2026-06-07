@@ -34,6 +34,7 @@
         {
             "name": "自动阅读主线剧情",
             "entry": "RunStoryHelper",
+            "default_check": true,
             "option": [
                 "阅读行为"
             ]

@@ -153,6 +153,7 @@
             "start_button_node": "FlagStartButton",
             "no_voice_button_node": "FlagNoVoiceButton",
             "next_story_checkbox_node": "FlagNextStoryCheckboxUnchecked",
+            "next_story_checkbox_checked_node": "FlagNextStoryCheckboxChecked",
             "network_error_node": "FlagNetworkError",
             "download_button_node": "FlagDownloadButton",
             "continuous_read_point": [494, 475],
@@ -172,6 +173,7 @@
             "skip_color_min_pixels": 1200,
             "skip_text_min_pixels": 250,
             "next_story_checkbox_wait": 0.3,
+            "next_story_auto_read_min_markers": 2,
             "story_start_wait": 5.0,
             "row_click_wait": 0.8,
             "reading_click_interval": 0.35,
@@ -210,6 +212,13 @@
     "FlagNextStoryCheckboxUnchecked": {
         "recognition": "TemplateMatch",
         "template": "next_story_checkbox_unchecked.png",
+        "roi": [560, 430, 180, 120],
+        "threshold": 0.82
+    },
+
+    "FlagNextStoryCheckboxChecked": {
+        "recognition": "TemplateMatch",
+        "template": "next_story_checkbox_checked.png",
         "roi": [560, 430, 180, 120],
         "threshold": 0.82
     },
