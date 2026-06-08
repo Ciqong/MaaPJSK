@@ -88,9 +88,9 @@ DEFAULT_PARAM: Dict[str, Any] = {
     "android_back_key": 4,
     "next_story_checkbox_wait": 0.3,
     "next_story_auto_read_min_markers": 2,
-    "skip_color_roi": [-285, -48, 100, 38],
-    "skip_color_min_pixels": 1200,
-    "skip_text_min_pixels": 250,
+    "skip_color_roi": [-330, -85, 190, 110],
+    "skip_color_min_pixels": 900,
+    "skip_text_min_pixels": 120,
 }
 
 
