@@ -83,7 +83,10 @@
             "story_home_filter_option_ratio": [0.521, 0.333],
             "story_home_filter_confirm_ratio": [0.594, 0.907],
             "story_home_filter_delay": 0.8,
-            "story_home_after_filter_wait": 1.0
+            "story_home_after_filter_wait": 1.0,
+            "story_home_confirm_retries": 2,
+            "story_home_confirm_retry_delay": 0.8,
+            "no_unread_stop_node": "StopNoUnreadStory"
         },
         "post_delay": 1000,
         "next": [
@@ -205,7 +208,7 @@
             "RunStoryHelper"
         ],
         "on_error": [
-            "StopNoUnreadStory"
+            "RunStoryHelper"
         ]
     },
 

@@ -73,6 +73,9 @@ DEFAULT_PARAM: Dict[str, Any] = {
     "story_home_filter_confirm_ratio": [0.594, 0.907],
     "story_home_filter_delay": 0.8,
     "story_home_after_filter_wait": 1.0,
+    "story_home_confirm_retries": 2,
+    "story_home_confirm_retry_delay": 0.8,
+    "no_unread_stop_node": "StopNoUnreadStory",
     "story_list_search_up_begin": [1070, 210],
     "story_list_search_up_end": [1070, 630],
     "story_list_search_up_duration": 220,
@@ -748,14 +751,26 @@ class FilterUnreadAndOpenStory(CustomAction):
             return False
 
         time.sleep(float(param["story_home_after_filter_wait"]))
-        image = _screencap(context)
-        if _handle_interruptions(context, image, param):
-            return False
+        story_hit = None
+        for attempt in range(int(param["story_home_confirm_retries"]) + 1):
+            image = _screencap(context)
+            if _handle_interruptions(context, image, param):
+                return False
 
-        story_hit = _recognize(context, str(param["story_home_confirm_node"]), image)
+            story_hit = _recognize(context, str(param["story_home_confirm_node"]), image)
+            if story_hit and story_hit.box:
+                break
+
+            if attempt < int(param["story_home_confirm_retries"]):
+                time.sleep(float(param["story_home_confirm_retry_delay"]))
+
         if not story_hit or not story_hit.box:
             print("No unread story remains after applying the unread filter.")
-            return False
+            stop_node = str(param["no_unread_stop_node"])
+            if not context.override_next(argv.node_name, [stop_node]):
+                print("Failed to override next to the no-unread stop node.")
+                return False
+            return True
 
         print("Unread filter applied; opening the selected unread story.")
         return _click_box_center(context, story_hit.box)
