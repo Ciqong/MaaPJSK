@@ -169,6 +169,16 @@
             "story_list_scroll_max": 12,
             "story_list_scroll_stable_threshold": 0.015,
             "story_list_scroll_stable_hits": 2,
+            "story_list_search_up_begin": [1070, 210],
+            "story_list_search_up_end": [1070, 630],
+            "story_list_search_up_duration": 220,
+            "story_list_search_up_delay": 0.55,
+            "story_list_search_up_max": 12,
+            "story_list_search_up_stable_threshold": 0.015,
+            "story_list_search_up_stable_hits": 2,
+            "story_page_back_point": [150, 42],
+            "story_page_back_wait": 1.2,
+            "android_back_key": 4,
             "skip_color_roi": [-285, -48, 100, 38],
             "skip_color_min_pixels": 1200,
             "skip_text_min_pixels": 250,
@@ -184,7 +194,7 @@
             "required_stable_hits": 2
         },
         "next": [
-            "FindAndReadNextUnreadStory"
+            "RunStoryHelper"
         ],
         "on_error": [
             "StopNoUnreadStory"

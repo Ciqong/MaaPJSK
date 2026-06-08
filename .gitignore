@@ -455,3 +455,4 @@ tools/ImageCropper/**/*.png
 
 # Runtime output
 debug/
+work/

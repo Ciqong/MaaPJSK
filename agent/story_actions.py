@@ -67,6 +67,16 @@ DEFAULT_PARAM: Dict[str, Any] = {
     "story_list_scroll_max": 12,
     "story_list_scroll_stable_threshold": 0.015,
     "story_list_scroll_stable_hits": 2,
+    "story_list_search_up_begin": [1070, 210],
+    "story_list_search_up_end": [1070, 630],
+    "story_list_search_up_duration": 220,
+    "story_list_search_up_delay": 0.55,
+    "story_list_search_up_max": 12,
+    "story_list_search_up_stable_threshold": 0.015,
+    "story_list_search_up_stable_hits": 2,
+    "story_page_back_point": [150, 42],
+    "story_page_back_wait": 1.2,
+    "android_back_key": 4,
     "next_story_checkbox_wait": 0.3,
     "next_story_auto_read_min_markers": 2,
     "skip_color_roi": [-285, -48, 100, 38],
@@ -397,6 +407,25 @@ def _swipe(
     )
 
 
+def _press_back(context: Context, param: Dict[str, Any]) -> bool:
+    print("No readable story entry remains in this story; returning to the story list.")
+
+    if _click(context, param["story_page_back_point"]):
+        time.sleep(float(param["story_page_back_wait"]))
+        return True
+
+    click_key = getattr(context.tasker.controller, "post_click_key", None)
+    if not click_key:
+        return False
+
+    key_job = click_key(int(param["android_back_key"])).wait()
+    if not key_job.succeeded:
+        return False
+
+    time.sleep(float(param["story_page_back_wait"]))
+    return True
+
+
 def _scroll_story_list_to_bottom(context: Context, param: Dict[str, Any]) -> np.ndarray:
     image = _screencap(context)
     previous = _crop(image, param["story_list_scroll_roi"])
@@ -432,6 +461,64 @@ def _scroll_story_list_to_bottom(context: Context, param: Dict[str, Any]) -> np.
 
     print("Story list scroll reached max attempts; using current position.")
     return image
+
+
+def _search_story_list_upward_for_readable_rows(
+    context: Context,
+    param: Dict[str, Any],
+    image: np.ndarray,
+) -> Tuple[np.ndarray, list[int]]:
+    previous = _crop(image, param["story_list_scroll_roi"])
+    stable_hits = 0
+
+    for index in range(int(param["story_list_search_up_max"])):
+        begin = _image_point(image, param["story_list_search_up_begin"])
+        end = _image_point(image, param["story_list_search_up_end"])
+        if not _swipe(context, begin, end, int(param["story_list_search_up_duration"])):
+            print("Story page upward search swipe failed.")
+            return image, []
+
+        time.sleep(float(param["story_list_search_up_delay"]))
+        image = _screencap(context)
+        if _handle_interruptions(context, image, param):
+            previous = _crop(image, param["story_list_scroll_roi"])
+            stable_hits = 0
+            continue
+
+        current = _crop(image, param["story_list_scroll_roi"])
+        diff = _mean_abs_diff(previous, current)
+        print(f"Story page upward search diff #{index + 1}: {diff:.4f}")
+
+        readable_row_indexes = _find_readable_row_indexes(context, image, param)
+        if readable_row_indexes:
+            print("Readable story marker found while searching upward.")
+            return image, readable_row_indexes
+
+        if diff <= float(param["story_list_search_up_stable_threshold"]):
+            stable_hits += 1
+            if stable_hits >= int(param["story_list_search_up_stable_hits"]):
+                print("Story page reached top during upward search.")
+                return image, []
+        else:
+            stable_hits = 0
+
+        previous = current
+
+    print("Story page upward search reached max attempts; no readable entries found.")
+    return image, []
+
+
+def _find_readable_story_page(
+    context: Context,
+    param: Dict[str, Any],
+) -> Tuple[np.ndarray, list[int]]:
+    image = _scroll_story_list_to_bottom(context, param)
+    readable_row_indexes = _find_readable_row_indexes(context, image, param)
+    if readable_row_indexes:
+        return image, readable_row_indexes
+
+    print("No readable marker found at the bottom; searching upward in this story.")
+    return _search_story_list_upward_for_readable_rows(context, param, image)
 
 
 def _find_story_start_after_row_click(
@@ -560,12 +647,14 @@ def _read_until_story_list_returns(
 class FindAndReadNextUnreadStory(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         param = _load_param(argv.custom_action_param)
-        story_list_baseline = _scroll_story_list_to_bottom(context, param)
-        readable_row_indexes = _find_readable_row_indexes(context, story_list_baseline, param)
+        story_list_baseline, readable_row_indexes = _find_readable_story_page(context, param)
         readable_row_set = set(readable_row_indexes)
         enable_next_story_auto_read = len(readable_row_indexes) >= int(
             param["next_story_auto_read_min_markers"]
         )
+
+        if not readable_row_indexes:
+            return _press_back(context, param)
 
         if enable_next_story_auto_read:
             print("Next-story auto read will be enabled; multiple readable stories remain.")
@@ -596,8 +685,8 @@ class FindAndReadNextUnreadStory(CustomAction):
 
             return _read_until_story_list_returns(context, story_list_baseline, param)
 
-        print("No SKIP/unread story entry was found at the bottom of the list.")
-        return False
+        print("Readable markers were detected, but no readable row could be opened.")
+        return _press_back(context, param)
 
 
 @AgentServer.custom_action("set_unread_story_filter")
