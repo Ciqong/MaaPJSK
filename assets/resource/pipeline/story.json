@@ -197,7 +197,7 @@
             "reading_click_interval": 0.35,
             "reading_check_interval": 2.0,
             "min_reading_seconds": 8.0,
-            "max_reading_seconds": 900.0,
+            "max_reading_seconds": 0.0,
             "return_diff_threshold": 0.08,
             "required_stable_hits": 2
         },

@@ -57,7 +57,7 @@ DEFAULT_PARAM: Dict[str, Any] = {
     "reading_click_interval": 0.35,
     "reading_check_interval": 2.0,
     "min_reading_seconds": 8.0,
-    "max_reading_seconds": 900.0,
+    "max_reading_seconds": 0.0,
     "return_diff_threshold": 0.08,
     "required_stable_hits": 2,
     "story_list_scroll_roi": [760, 160, 620, 500],
@@ -601,13 +601,18 @@ def _read_until_story_list_returns(
     next_click_at = 0.0
     next_check_at = 0.0
     stable_hits = 0
+    timeout_reported = False
 
     while True:
         now = time.monotonic()
         elapsed = now - started_at
-        if elapsed > float(param["max_reading_seconds"]):
-            print("Reading loop timed out before returning to story list.")
-            return False
+        max_reading_seconds = float(param["max_reading_seconds"])
+        if max_reading_seconds > 0 and elapsed > max_reading_seconds and not timeout_reported:
+            print(
+                "Reading loop exceeded max_reading_seconds; "
+                "continuing instead of marking the task complete."
+            )
+            timeout_reported = True
 
         if now >= next_click_at:
             _click(context, param["reading_click_point"])
