@@ -45,6 +45,7 @@ DEFAULT_PARAM: Dict[str, Any] = {
     "next_story_checkbox_checked_node": "FlagNextStoryCheckboxChecked",
     "network_error_node": "FlagNetworkError",
     "download_button_node": "FlagDownloadButton",
+    "story_home_confirm_node": "FlagStoryHomeConfirm",
     "continuous_read_point": [494, 475],
     "no_voice_point": [633, 540],
     "reading_click_point": [185, 352],
@@ -67,6 +68,11 @@ DEFAULT_PARAM: Dict[str, Any] = {
     "story_list_scroll_max": 12,
     "story_list_scroll_stable_threshold": 0.015,
     "story_list_scroll_stable_hits": 2,
+    "story_home_filter_button_ratio": [0.752, 0.063],
+    "story_home_filter_option_ratio": [0.521, 0.333],
+    "story_home_filter_confirm_ratio": [0.594, 0.907],
+    "story_home_filter_delay": 0.8,
+    "story_home_after_filter_wait": 1.0,
     "story_list_search_up_begin": [1070, 210],
     "story_list_search_up_end": [1070, 630],
     "story_list_search_up_duration": 220,
@@ -710,3 +716,46 @@ class SetUnreadStoryFilter(CustomAction):
 
         time.sleep(click_delay)
         return True
+
+
+@AgentServer.custom_action("filter_unread_and_open_story")
+class FilterUnreadAndOpenStory(CustomAction):
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        param = _load_param(argv.custom_action_param)
+        click_delay = float(param["story_home_filter_delay"])
+
+        image = _screencap(context)
+        if _handle_interruptions(context, image, param):
+            image = _screencap(context)
+
+        if not _click(context, _ratio_point(image, param["story_home_filter_button_ratio"])):
+            return False
+
+        time.sleep(click_delay)
+        image = _screencap(context)
+        if _handle_interruptions(context, image, param):
+            return False
+
+        if not _click(context, _ratio_point(image, param["story_home_filter_option_ratio"])):
+            return False
+
+        time.sleep(click_delay)
+        image = _screencap(context)
+        if _handle_interruptions(context, image, param):
+            return False
+
+        if not _click(context, _ratio_point(image, param["story_home_filter_confirm_ratio"])):
+            return False
+
+        time.sleep(float(param["story_home_after_filter_wait"]))
+        image = _screencap(context)
+        if _handle_interruptions(context, image, param):
+            return False
+
+        story_hit = _recognize(context, str(param["story_home_confirm_node"]), image)
+        if not story_hit or not story_hit.box:
+            print("No unread story remains after applying the unread filter.")
+            return False
+
+        print("Unread filter applied; opening the selected unread story.")
+        return _click_box_center(context, story_hit.box)

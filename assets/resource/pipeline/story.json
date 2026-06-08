@@ -75,8 +75,16 @@
         "template": "story_home_confirm.png",
         "roi": [-470, -120, 420, 120],
         "threshold": 0.78,
-        "action": "Click",
-        "target": true,
+        "action": "Custom",
+        "custom_action": "filter_unread_and_open_story",
+        "custom_action_param": {
+            "story_home_confirm_node": "FlagStoryHomeConfirm",
+            "story_home_filter_button_ratio": [0.752, 0.063],
+            "story_home_filter_option_ratio": [0.521, 0.333],
+            "story_home_filter_confirm_ratio": [0.594, 0.907],
+            "story_home_filter_delay": 0.8,
+            "story_home_after_filter_wait": 1.0
+        },
         "post_delay": 1000,
         "next": [
             "FindAndReadNextUnreadStory"
@@ -252,6 +260,13 @@
         "template": "story_info_button.png",
         "roi": [-280, 130, 260, 560],
         "threshold": 0.80
+    },
+
+    "FlagStoryHomeConfirm": {
+        "recognition": "TemplateMatch",
+        "template": "story_home_confirm.png",
+        "roi": [-470, -120, 420, 120],
+        "threshold": 0.78
     },
 
     "FlagSkipBadgeRowBottom": {
