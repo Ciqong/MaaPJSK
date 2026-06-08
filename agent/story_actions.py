@@ -386,11 +386,6 @@ def _is_story_list_visible(context: Context, image: np.ndarray, param: Dict[str,
             print(f"Story list marker matched: {node}.")
             return True
 
-    for row_index in range(len(param.get("story_row_points") or [])):
-        if _row_has_skip_color_marker(image, param, row_index, quiet=True):
-            print("Story list marker matched by SKIP color.")
-            return True
-
     return False
 
 
