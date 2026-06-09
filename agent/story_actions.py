@@ -12,6 +12,10 @@ Point = Tuple[int, int]
 Box = Tuple[int, int, int, int]
 
 
+_LAST_STORY_HOME_CANDIDATE_COUNT: Optional[int] = None
+_LAST_STORY_HOME_CANDIDATE_ROWS: list[int] = []
+
+
 DEFAULT_PARAM: Dict[str, Any] = {
     "story_row_points": [
         [907, 623],
@@ -39,6 +43,7 @@ DEFAULT_PARAM: Dict[str, Any] = {
         "FlagSkipBadgeAny",
         "FlagUnreadBadgeAny",
     ],
+    "use_unread_badge_as_readable": False,
     "start_button_node": "FlagStartButton",
     "no_voice_button_node": "FlagNoVoiceButton",
     "next_story_checkbox_node": "FlagNextStoryCheckboxUnchecked",
@@ -75,6 +80,10 @@ DEFAULT_PARAM: Dict[str, Any] = {
     "story_home_after_filter_wait": 1.0,
     "story_home_confirm_retries": 2,
     "story_home_confirm_retry_delay": 0.8,
+    "story_home_card_points": [[405, 360], [350, 505], [350, 620]],
+    "story_home_card_crop_size": [220, 90],
+    "story_home_card_min_std": 18.0,
+    "story_home_card_min_mean": 18.0,
     "no_unread_stop_node": "StopNoUnreadStory",
     "story_list_search_up_begin": [1070, 210],
     "story_list_search_up_end": [1070, 630],
@@ -85,12 +94,16 @@ DEFAULT_PARAM: Dict[str, Any] = {
     "story_list_search_up_stable_hits": 2,
     "story_page_back_point": [150, 42],
     "story_page_back_wait": 1.2,
+    "story_detail_back_point": [150, 42],
+    "story_detail_back_wait": 1.2,
     "android_back_key": 4,
     "next_story_checkbox_wait": 0.3,
     "next_story_auto_read_min_markers": 2,
     "skip_color_roi": [-330, -85, 190, 110],
     "skip_color_min_pixels": 900,
     "skip_text_min_pixels": 120,
+    "story_list_total_scan_enabled": True,
+    "story_row_fingerprint_roi": [-520, -55, 720, 100],
 }
 
 
@@ -171,6 +184,12 @@ def _crop(image: np.ndarray, roi: Sequence[int]) -> np.ndarray:
     return image[top:bottom, left:right]
 
 
+def _center_crop(image: np.ndarray, point: Sequence[int], size: Sequence[int]) -> np.ndarray:
+    x, y = _image_point(image, point)
+    width, height = [max(1, int(v)) for v in size]
+    return _crop(image, [x - width // 2, y - height // 2, width, height])
+
+
 def _row_relative_crop(
     image: np.ndarray,
     row_point: Sequence[int],
@@ -230,6 +249,22 @@ def _count_skip_marker_pixels(crop: np.ndarray) -> Tuple[int, int]:
         int(np.count_nonzero(rgb_cyan_mask | bgr_cyan_mask)),
         int(np.count_nonzero(rgb_text_mask | bgr_text_mask)),
     )
+
+
+def _row_fingerprint(image: np.ndarray, param: Dict[str, Any], row_index: int) -> Tuple[int, ...]:
+    row_points = param.get("story_row_points") or []
+    if row_index >= len(row_points):
+        return ()
+
+    crop = _row_relative_crop(image, row_points[row_index], param["story_row_fingerprint_roi"])
+    if crop.size <= 0:
+        return ()
+
+    sample = crop[:: max(1, crop.shape[0] // 8), :: max(1, crop.shape[1] // 16)]
+    if sample.ndim == 3:
+        sample = np.mean(sample[..., :3], axis=2)
+    quantized = np.clip(sample // 16, 0, 15).astype(np.uint8)
+    return tuple(int(v) for v in quantized.flatten())
 
 
 def _mean_abs_diff(left: np.ndarray, right: np.ndarray) -> float:
@@ -350,19 +385,40 @@ def _row_has_readable_marker(
     row_index: int,
     quiet: bool = False,
 ) -> bool:
-    skip_badge_nodes = param.get("skip_badge_nodes") or []
-    unread_badge_nodes = param.get("unread_badge_nodes") or []
-
-    if _row_has_marker_node(context, image, skip_badge_nodes, row_index, "SKIP", quiet):
-        return True
-    if _row_has_skip_color_marker(image, param, row_index, quiet):
-        return True
-    if _row_has_marker_node(context, image, unread_badge_nodes, row_index, "Unread", quiet):
+    reasons = _row_readable_reasons(context, image, param, row_index)
+    if reasons:
+        if not quiet:
+            print(
+                f"Readable marker found on visible row #{row_index + 1}: "
+                f"{', '.join(reasons)}."
+            )
         return True
 
     if not quiet:
         print(f"No SKIP/unread marker found on visible row #{row_index + 1}; skipping row.")
     return False
+
+
+def _row_readable_reasons(
+    context: Context,
+    image: np.ndarray,
+    param: Dict[str, Any],
+    row_index: int,
+) -> list[str]:
+    skip_badge_nodes = param.get("skip_badge_nodes") or []
+    unread_badge_nodes = param.get("unread_badge_nodes") or []
+
+    reasons = []
+    if _row_has_marker_node(context, image, skip_badge_nodes, row_index, "SKIP", True):
+        reasons.append("skip_template")
+    if _row_has_skip_color_marker(image, param, row_index, True):
+        reasons.append("skip_color")
+    if bool(param.get("use_unread_badge_as_readable")) and _row_has_marker_node(
+        context, image, unread_badge_nodes, row_index, "Unread", True
+    ):
+        reasons.append("unread_template")
+
+    return reasons
 
 
 def _find_readable_row_indexes(
@@ -373,10 +429,22 @@ def _find_readable_row_indexes(
     readable_rows = []
     row_count = len(param.get("story_row_points") or [])
     for row_index in range(row_count):
-        if _row_has_readable_marker(context, image, param, row_index, quiet=True):
+        reasons = _row_readable_reasons(context, image, param, row_index)
+        if reasons:
             readable_rows.append(row_index)
+            print(
+                f"Chapter scan row #{row_index + 1}: readable "
+                f"({', '.join(reasons)})."
+            )
+        else:
+            print(f"Chapter scan row #{row_index + 1}: no SKIP/unread marker.")
 
-    print(f"Readable story markers on current page: {len(readable_rows)}.")
+    readable_numbers = [index + 1 for index in readable_rows]
+    print(
+        "Chapter unread section scan: "
+        f"visible_rows={row_count}, readable_rows={len(readable_rows)}, "
+        f"readable_row_numbers={readable_numbers}."
+    )
     return readable_rows
 
 
@@ -390,6 +458,20 @@ def _is_story_list_visible(context: Context, image: np.ndarray, param: Dict[str,
             return True
 
     return False
+
+
+def _is_story_detail_visible(context: Context, image: np.ndarray, param: Dict[str, Any]) -> bool:
+    detail_target = _get_story_detail_target(context, image, param)
+    if not detail_target:
+        return False
+
+    target_kind, _ = detail_target
+    if target_kind == "no_voice":
+        print("Story detail marker matched: no-voice button.")
+        return True
+
+    print("Story detail marker matched: start button.")
+    return True
 
 
 def _swipe(
@@ -413,9 +495,22 @@ def _swipe(
 
 def _press_back(context: Context, param: Dict[str, Any]) -> bool:
     print("No readable story entry remains in this story; returning to the story list.")
+    return _press_back_with_point(
+        context,
+        param,
+        param["story_page_back_point"],
+        float(param["story_page_back_wait"]),
+    )
 
-    if _click(context, param["story_page_back_point"]):
-        time.sleep(float(param["story_page_back_wait"]))
+
+def _press_back_with_point(
+    context: Context,
+    param: Dict[str, Any],
+    point: Sequence[int],
+    wait_seconds: float,
+) -> bool:
+    if _click(context, point):
+        time.sleep(wait_seconds)
         return True
 
     click_key = getattr(context.tasker.controller, "post_click_key", None)
@@ -426,8 +521,80 @@ def _press_back(context: Context, param: Dict[str, Any]) -> bool:
     if not key_job.succeeded:
         return False
 
-    time.sleep(float(param["story_page_back_wait"]))
+    time.sleep(wait_seconds)
     return True
+
+
+def _ensure_story_list_after_reading(context: Context, param: Dict[str, Any]) -> bool:
+    image = _screencap(context)
+    if _handle_interruptions(context, image, param):
+        image = _screencap(context)
+
+    if _is_story_list_visible(context, image, param):
+        print("Chapter list is visible after reading; rescanning this story.")
+        return True
+
+    start_target = _find_story_start_after_row_click(context, param)
+    if not start_target:
+        print("Chapter list is not visible yet; pressing back to return to the chapter page.")
+    else:
+        print("Story detail page is visible after reading; pressing back to the chapter page.")
+
+    if not _press_back_with_point(
+        context,
+        param,
+        param["story_detail_back_point"],
+        float(param["story_detail_back_wait"]),
+    ):
+        return False
+
+    image = _screencap(context)
+    if _handle_interruptions(context, image, param):
+        image = _screencap(context)
+
+    if _is_story_list_visible(context, image, param):
+        print("Returned to chapter list after reading; rescanning this story.")
+        return True
+
+    print("Could not confirm the chapter list after pressing back.")
+    return True
+
+
+def _scan_story_home_candidates(image: np.ndarray, param: Dict[str, Any]) -> list[int]:
+    global _LAST_STORY_HOME_CANDIDATE_COUNT, _LAST_STORY_HOME_CANDIDATE_ROWS
+
+    candidates = []
+    points = param.get("story_home_card_points") or []
+    crop_size = param.get("story_home_card_crop_size") or [1, 1]
+    min_std = float(param.get("story_home_card_min_std", 0.0))
+    min_mean = float(param.get("story_home_card_min_mean", 0.0))
+
+    for index, point in enumerate(points):
+        crop = _center_crop(image, point, crop_size)
+        mean = float(np.mean(crop)) if crop.size else 0.0
+        std = float(np.std(crop)) if crop.size else 0.0
+        if mean >= min_mean and std >= min_std:
+            candidates.append(index)
+            print(
+                f"Story home scan row #{index + 1}: candidate "
+                f"(mean={mean:.1f}, std={std:.1f})."
+            )
+        else:
+            print(
+                f"Story home scan row #{index + 1}: empty/disabled "
+                f"(mean={mean:.1f}, std={std:.1f})."
+            )
+
+    candidate_numbers = [index + 1 for index in candidates]
+    _LAST_STORY_HOME_CANDIDATE_COUNT = len(candidates)
+    _LAST_STORY_HOME_CANDIDATE_ROWS = candidate_numbers
+    print(
+        "Story home candidate scan: "
+        f"visible_slots={len(points)}, candidates={len(candidates)}, "
+        f"candidate_rows={candidate_numbers}. "
+        "These are only outer candidates; unread truth is checked inside the story."
+    )
+    return candidates
 
 
 def _scroll_story_list_to_bottom(context: Context, param: Dict[str, Any]) -> np.ndarray:
@@ -512,12 +679,90 @@ def _search_story_list_upward_for_readable_rows(
     return image, []
 
 
+def _scan_story_list_total_unread_sections(
+    context: Context,
+    param: Dict[str, Any],
+    image: np.ndarray,
+    bottom_readable_row_indexes: list[int],
+) -> int:
+    total = 0
+    seen_fingerprints = set()
+
+    def count_current_page(page_image: np.ndarray, readable_rows: list[int], label: str) -> int:
+        subtotal = 0
+        for row_index in readable_rows:
+            fingerprint = _row_fingerprint(page_image, param, row_index)
+            if fingerprint and fingerprint in seen_fingerprints:
+                print(f"Chapter total scan {label} row #{row_index + 1}: duplicate, ignored.")
+                continue
+            if fingerprint:
+                seen_fingerprints.add(fingerprint)
+            subtotal += 1
+        print(f"Chapter total scan {label}: readable_rows={len(readable_rows)}, new={subtotal}.")
+        return subtotal
+
+    total += count_current_page(image, bottom_readable_row_indexes, "bottom")
+    previous = _crop(image, param["story_list_scroll_roi"])
+    stable_hits = 0
+
+    for index in range(int(param["story_list_search_up_max"])):
+        begin = _image_point(image, param["story_list_search_up_begin"])
+        end = _image_point(image, param["story_list_search_up_end"])
+        if not _swipe(context, begin, end, int(param["story_list_search_up_duration"])):
+            print("Chapter total scan swipe failed.")
+            break
+
+        time.sleep(float(param["story_list_search_up_delay"]))
+        image = _screencap(context)
+        if _handle_interruptions(context, image, param):
+            previous = _crop(image, param["story_list_scroll_roi"])
+            stable_hits = 0
+            continue
+
+        current = _crop(image, param["story_list_scroll_roi"])
+        diff = _mean_abs_diff(previous, current)
+        print(f"Chapter total scan upward diff #{index + 1}: {diff:.4f}")
+
+        readable_row_indexes = _find_readable_row_indexes(context, image, param)
+        total += count_current_page(image, readable_row_indexes, f"page #{index + 1}")
+
+        if diff <= float(param["story_list_search_up_stable_threshold"]):
+            stable_hits += 1
+            if stable_hits >= int(param["story_list_search_up_stable_hits"]):
+                print("Chapter total scan reached top.")
+                break
+        else:
+            stable_hits = 0
+
+        previous = current
+
+    print(f"Chapter unread section total scan: total_readable_sections={total}.")
+    return total
+
+
 def _find_readable_story_page(
     context: Context,
     param: Dict[str, Any],
 ) -> Tuple[np.ndarray, list[int]]:
     image = _scroll_story_list_to_bottom(context, param)
     readable_row_indexes = _find_readable_row_indexes(context, image, param)
+    if bool(param.get("story_list_total_scan_enabled")):
+        total_readable_sections = _scan_story_list_total_unread_sections(
+            context,
+            param,
+            image,
+            readable_row_indexes,
+        )
+        home_count = _LAST_STORY_HOME_CANDIDATE_COUNT
+        home_rows = _LAST_STORY_HOME_CANDIDATE_ROWS
+        print(
+            "Combined unread decision snapshot: "
+            f"outer_story_candidates={home_count}, outer_candidate_rows={home_rows}, "
+            f"inner_readable_sections={total_readable_sections}."
+        )
+        image = _scroll_story_list_to_bottom(context, param)
+        readable_row_indexes = _find_readable_row_indexes(context, image, param)
+
     if readable_row_indexes:
         return image, readable_row_indexes
 
@@ -545,6 +790,26 @@ def _find_story_start_after_row_click(
         if start_hit and start_hit.box:
             return "start", start_hit.box
         time.sleep(0.25)
+
+    return None
+
+
+def _get_story_detail_target(
+    context: Context,
+    image: np.ndarray,
+    param: Dict[str, Any],
+) -> Optional[Tuple[str, Box]]:
+    no_voice_node = str(param.get("no_voice_button_node", ""))
+    if no_voice_node:
+        no_voice_hit = _recognize(context, no_voice_node, image)
+        if no_voice_hit and no_voice_hit.box:
+            return "no_voice", no_voice_hit.box
+
+    start_node = str(param.get("start_button_node", ""))
+    if start_node:
+        start_hit = _recognize(context, start_node, image)
+        if start_hit and start_hit.box:
+            return "start", start_hit.box
 
     return None
 
@@ -635,14 +900,18 @@ def _read_until_story_list_returns(
             list_visible = elapsed >= float(
                 param["min_reading_seconds"]
             ) and _is_story_list_visible(context, image, param)
+            detail_visible = elapsed >= float(
+                param["min_reading_seconds"]
+            ) and _is_story_detail_visible(context, image, param)
 
-            if elapsed >= float(param["min_reading_seconds"]) and (
-                list_visible or diff <= float(param["return_diff_threshold"])
-            ):
+            if detail_visible:
+                print("Story detail page returned after reading; chapter is finished.")
+                return True
+
+            if elapsed >= float(param["min_reading_seconds"]) and list_visible:
                 stable_hits += 1
                 if stable_hits >= int(param["required_stable_hits"]):
-                    if list_visible:
-                        print("Story list returned; continuing with the next readable row.")
+                    print("Story list returned; continuing with the next readable row.")
                     return True
             else:
                 stable_hits = 0
@@ -695,8 +964,8 @@ class FindAndReadNextUnreadStory(CustomAction):
             if not _read_until_story_list_returns(context, story_list_baseline, param):
                 return False
 
-            print("Finished a chapter; returning to the story list before selecting again.")
-            return _press_back(context, param)
+            print("Finished a chapter; returning to the chapter page before rescanning.")
+            return _ensure_story_list_after_reading(context, param)
 
         print("Readable markers were detected, but no readable row could be opened.")
         return _press_back(context, param)
@@ -767,6 +1036,8 @@ class FilterUnreadAndOpenStory(CustomAction):
 
             if attempt < int(param["story_home_confirm_retries"]):
                 time.sleep(float(param["story_home_confirm_retry_delay"]))
+
+        _scan_story_home_candidates(image, param)
 
         if not story_hit or not story_hit.box:
             print("No unread story remains after applying the unread filter.")
