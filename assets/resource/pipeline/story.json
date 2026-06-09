@@ -8,6 +8,7 @@
             "[JumpBack]OpenStoryFromMainPage",
             "[JumpBack]OpenMainStoryPage",
             "[JumpBack]SetUnreadStoryFilter",
+            "[JumpBack]ContinueStoryListAndReadChapterTabs",
             "[JumpBack]ContinueStoryListAndRead",
             "[JumpBack]ContinueStoryListAndReadInfoButton",
             "[JumpBack]OpenStoryListAndRead"
@@ -110,6 +111,18 @@
         ]
     },
 
+    "ContinueStoryListAndReadChapterTabs": {
+        "recognition": "TemplateMatch",
+        "template": "story_chapter_tabs.png",
+        "roi": [-760, 70, 700, 80],
+        "threshold": 0.78,
+        "action": "DoNothing",
+        "post_delay": 200,
+        "next": [
+            "FindAndReadNextUnreadStory"
+        ]
+    },
+
     "ContinueStoryListAndReadInfoButton": {
         "recognition": "TemplateMatch",
         "template": "story_info_button.png",
@@ -161,10 +174,16 @@
                 "FlagUnreadBadgeRowFifth"
             ],
             "story_list_marker_nodes": [
+                "FlagStoryChapterTabs",
                 "FlagStoryInfoButtonAny",
                 "FlagSkipBadgeAny",
                 "FlagUnreadBadgeAny"
             ],
+            "story_home_marker_nodes": [
+                "FlagStoryHomeConfirm",
+                "FlagStoryHomeFilterButton"
+            ],
+            "story_home_marker_min_hits": 2,
             "story_info_button_points": [
                 [-182, 623],
                 [-182, 510],
@@ -279,6 +298,13 @@
         "threshold": 0.74
     },
 
+    "FlagStoryChapterTabs": {
+        "recognition": "TemplateMatch",
+        "template": "story_chapter_tabs.png",
+        "roi": [-760, 70, 700, 80],
+        "threshold": 0.78
+    },
+
     "FlagStoryInfoButtonAny": {
         "recognition": "TemplateMatch",
         "template": "story_info_button.png",
@@ -291,6 +317,13 @@
         "template": "story_home_confirm.png",
         "roi": [-470, -120, 420, 120],
         "threshold": 0.74
+    },
+
+    "FlagStoryHomeFilterButton": {
+        "recognition": "TemplateMatch",
+        "template": "filter_button.png",
+        "roi": [-500, 0, 420, 90],
+        "threshold": 0.78
     },
 
     "FlagSkipBadgeRowBottom": {

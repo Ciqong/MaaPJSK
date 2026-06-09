@@ -39,10 +39,16 @@ DEFAULT_PARAM: Dict[str, Any] = {
         "FlagUnreadBadgeRowFifth",
     ],
     "story_list_marker_nodes": [
+        "FlagStoryChapterTabs",
         "FlagStoryInfoButtonAny",
         "FlagSkipBadgeAny",
         "FlagUnreadBadgeAny",
     ],
+    "story_home_marker_nodes": [
+        "FlagStoryHomeConfirm",
+        "FlagStoryHomeFilterButton",
+    ],
+    "story_home_marker_min_hits": 2,
     "story_info_button_points": [
         [-182, 623],
         [-182, 510],
@@ -495,6 +501,20 @@ def _is_story_list_visible(context: Context, image: np.ndarray, param: Dict[str,
     return False
 
 
+def _is_story_home_visible(context: Context, image: np.ndarray, param: Dict[str, Any]) -> bool:
+    hits = 0
+    required_hits = int(param.get("story_home_marker_min_hits", 1))
+    for raw_node in param.get("story_home_marker_nodes") or []:
+        node = str(raw_node)
+        if not node:
+            continue
+        if _recognize(context, node, image):
+            print(f"Story home marker matched: {node}.")
+            hits += 1
+
+    print(f"Story home marker scan: hits={hits}, required={required_hits}.")
+    return hits >= required_hits
+
 def _has_story_info_button_column(image: np.ndarray, param: Dict[str, Any]) -> bool:
     hits = 0
     points = param.get("story_info_button_points") or []
@@ -612,6 +632,10 @@ def _ensure_story_list_after_reading(context: Context, param: Dict[str, Any]) ->
         print("Chapter list is visible after reading; rescanning this story.")
         return True
 
+    if _is_story_home_visible(context, image, param):
+        print("Outer story list is visible after reading; continuing from the story home.")
+        return True
+
     start_target = _find_story_start_after_row_click(context, param)
     if not start_target:
         print("Chapter list is not visible yet; pressing back to return to the chapter page.")
@@ -632,6 +656,10 @@ def _ensure_story_list_after_reading(context: Context, param: Dict[str, Any]) ->
 
     if _is_story_list_visible(context, image, param):
         print("Returned to chapter list after reading; rescanning this story.")
+        return True
+
+    if _is_story_home_visible(context, image, param):
+        print("Returned to outer story list after reading; continuing from the story home.")
         return True
 
     print("Could not confirm the chapter list after pressing back.")
@@ -986,6 +1014,14 @@ def _read_until_story_list_returns(
                 print("Story detail page returned after reading; chapter is finished.")
                 return True
 
+            home_visible = elapsed >= float(
+                param["min_reading_seconds"]
+            ) and _is_story_home_visible(context, image, param)
+
+            if home_visible:
+                print("Outer story list returned after reading; continuing with story selection.")
+                return True
+
             if elapsed >= float(param["min_reading_seconds"]) and list_visible:
                 stable_hits += 1
                 if stable_hits >= int(param["required_stable_hits"]):
@@ -1042,7 +1078,7 @@ class FindAndReadNextUnreadStory(CustomAction):
             if not _read_until_story_list_returns(context, story_list_baseline, param):
                 return False
 
-            print("Finished a chapter; returning to the chapter page before rescanning.")
+            print("Finished a chapter; confirming the current page before rescanning.")
             return _ensure_story_list_after_reading(context, param)
 
         print("Readable markers were detected, but no readable row could be opened.")
