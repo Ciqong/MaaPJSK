@@ -692,7 +692,11 @@ class FindAndReadNextUnreadStory(CustomAction):
             ):
                 return False
 
-            return _read_until_story_list_returns(context, story_list_baseline, param)
+            if not _read_until_story_list_returns(context, story_list_baseline, param):
+                return False
+
+            print("Finished a chapter; returning to the story list before selecting again.")
+            return _press_back(context, param)
 
         print("Readable markers were detected, but no readable row could be opened.")
         return _press_back(context, param)
