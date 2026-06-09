@@ -114,7 +114,7 @@
         "recognition": "TemplateMatch",
         "template": "story_info_button.png",
         "roi": [-280, 130, 260, 560],
-        "threshold": 0.80,
+        "threshold": 0.76,
         "action": "DoNothing",
         "post_delay": 200,
         "next": [
@@ -283,7 +283,7 @@
         "recognition": "TemplateMatch",
         "template": "story_info_button.png",
         "roi": [-280, 130, 260, 560],
-        "threshold": 0.80
+        "threshold": 0.76
     },
 
     "FlagStoryHomeConfirm": {
