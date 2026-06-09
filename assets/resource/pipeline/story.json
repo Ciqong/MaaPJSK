@@ -74,7 +74,7 @@
         "recognition": "TemplateMatch",
         "template": "story_home_confirm.png",
         "roi": [-470, -120, 420, 120],
-        "threshold": 0.78,
+        "threshold": 0.74,
         "action": "Custom",
         "custom_action": "filter_unread_and_open_story",
         "custom_action_param": {
@@ -290,7 +290,7 @@
         "recognition": "TemplateMatch",
         "template": "story_home_confirm.png",
         "roi": [-470, -120, 420, 120],
-        "threshold": 0.78
+        "threshold": 0.74
     },
 
     "FlagSkipBadgeRowBottom": {
