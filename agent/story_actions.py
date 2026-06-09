@@ -44,6 +44,9 @@ DEFAULT_PARAM: Dict[str, Any] = {
         "FlagSkipBadgeAny",
         "FlagUnreadBadgeAny",
     ],
+    "story_list_strict_marker_nodes": [
+        "FlagStoryChapterTabs",
+    ],
     "story_home_marker_nodes": [
         "FlagStoryHomeConfirm",
         "FlagStoryHomeFilterButton",
@@ -62,6 +65,7 @@ DEFAULT_PARAM: Dict[str, Any] = {
     "story_info_button_min_dark_pixels": 60,
     "use_unread_badge_as_readable": False,
     "use_skip_template_without_color": False,
+    "use_skip_color_without_template": False,
     "start_button_node": "FlagStartButton",
     "no_voice_button_node": "FlagNoVoiceButton",
     "next_story_checkbox_node": "FlagNextStoryCheckboxUnchecked",
@@ -457,6 +461,15 @@ def _row_readable_reasons(
         )
         reasons = [reason for reason in reasons if reason != "skip_template"]
 
+    if has_skip_color and not has_skip_template and not bool(
+        param.get("use_skip_color_without_template")
+    ):
+        print(
+            f"SKIP color ignored on visible row #{row_index + 1}; "
+            "the SKIP template did not match."
+        )
+        reasons = [reason for reason in reasons if reason != "skip_color"]
+
     return reasons
 
 
@@ -500,6 +513,24 @@ def _is_story_list_visible(context: Context, image: np.ndarray, param: Dict[str,
         print("Story list marker matched by info-button column.")
         return True
 
+    return False
+
+
+def _is_story_list_visible_strict(
+    context: Context,
+    image: np.ndarray,
+    param: Dict[str, Any],
+) -> bool:
+    nodes = param.get("story_list_strict_marker_nodes") or ["FlagStoryChapterTabs"]
+    for raw_node in nodes:
+        node = str(raw_node)
+        if not node:
+            continue
+        if _recognize(context, node, image):
+            print(f"Strict story list marker matched: {node}.")
+            return True
+
+    print("Strict story list marker not matched.")
     return False
 
 
@@ -640,7 +671,7 @@ def _ensure_story_list_after_reading(context: Context, param: Dict[str, Any]) ->
     if _handle_interruptions(context, image, param):
         image = _screencap(context)
 
-    if _is_story_list_visible(context, image, param):
+    if _is_story_list_visible_strict(context, image, param):
         return _return_from_chapter_list_after_reading(context, param)
 
     if _is_story_home_visible(context, image, param):
@@ -665,7 +696,7 @@ def _ensure_story_list_after_reading(context: Context, param: Dict[str, Any]) ->
     if _handle_interruptions(context, image, param):
         image = _screencap(context)
 
-    if _is_story_list_visible(context, image, param):
+    if _is_story_list_visible_strict(context, image, param):
         return _return_from_chapter_list_after_reading(context, param)
 
     if _is_story_home_visible(context, image, param):
@@ -1015,7 +1046,7 @@ def _read_until_story_list_returns(
 
             list_visible = elapsed >= float(
                 param["min_reading_seconds"]
-            ) and _is_story_list_visible(context, image, param)
+            ) and _is_story_list_visible_strict(context, image, param)
             detail_visible = elapsed >= float(
                 param["min_reading_seconds"]
             ) and _is_story_detail_visible(context, image, param)

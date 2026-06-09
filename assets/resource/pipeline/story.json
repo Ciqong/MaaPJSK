@@ -179,6 +179,9 @@
                 "FlagSkipBadgeAny",
                 "FlagUnreadBadgeAny"
             ],
+            "story_list_strict_marker_nodes": [
+                "FlagStoryChapterTabs"
+            ],
             "story_home_marker_nodes": [
                 "FlagStoryHomeConfirm",
                 "FlagStoryHomeFilterButton"
@@ -197,6 +200,7 @@
             "story_info_button_min_dark_pixels": 60,
             "use_unread_badge_as_readable": false,
             "use_skip_template_without_color": false,
+            "use_skip_color_without_template": false,
             "start_button_node": "FlagStartButton",
             "no_voice_button_node": "FlagNoVoiceButton",
             "next_story_checkbox_node": "FlagNextStoryCheckboxUnchecked",
