@@ -43,7 +43,19 @@ DEFAULT_PARAM: Dict[str, Any] = {
         "FlagSkipBadgeAny",
         "FlagUnreadBadgeAny",
     ],
+    "story_info_button_points": [
+        [-182, 623],
+        [-182, 510],
+        [-182, 397],
+        [-182, 284],
+        [-182, 171],
+    ],
+    "story_info_button_crop_size": [70, 70],
+    "story_info_button_min_hits": 2,
+    "story_info_button_min_white_pixels": 700,
+    "story_info_button_min_dark_pixels": 60,
     "use_unread_badge_as_readable": False,
+    "use_skip_template_without_color": False,
     "start_button_node": "FlagStartButton",
     "no_voice_button_node": "FlagNoVoiceButton",
     "next_story_checkbox_node": "FlagNextStoryCheckboxUnchecked",
@@ -99,8 +111,8 @@ DEFAULT_PARAM: Dict[str, Any] = {
     "android_back_key": 4,
     "next_story_checkbox_wait": 0.3,
     "next_story_auto_read_min_markers": 2,
-    "skip_color_roi": [-330, -85, 190, 110],
-    "skip_color_min_pixels": 900,
+    "skip_color_roi": [-300, -45, 110, 55],
+    "skip_color_min_pixels": 800,
     "skip_text_min_pixels": 120,
     "story_list_total_scan_enabled": True,
     "story_row_fingerprint_roi": [-520, -55, 720, 100],
@@ -409,14 +421,33 @@ def _row_readable_reasons(
     unread_badge_nodes = param.get("unread_badge_nodes") or []
 
     reasons = []
-    if _row_has_marker_node(context, image, skip_badge_nodes, row_index, "SKIP", True):
+    has_skip_template = _row_has_marker_node(
+        context,
+        image,
+        skip_badge_nodes,
+        row_index,
+        "SKIP",
+        True,
+    )
+    has_skip_color = _row_has_skip_color_marker(image, param, row_index, True)
+
+    if has_skip_template:
         reasons.append("skip_template")
-    if _row_has_skip_color_marker(image, param, row_index, True):
+    if has_skip_color:
         reasons.append("skip_color")
     if bool(param.get("use_unread_badge_as_readable")) and _row_has_marker_node(
         context, image, unread_badge_nodes, row_index, "Unread", True
     ):
         reasons.append("unread_template")
+
+    if has_skip_template and not has_skip_color and not bool(
+        param.get("use_skip_template_without_color")
+    ):
+        print(
+            f"SKIP template ignored on visible row #{row_index + 1}; "
+            "the tight color check did not match."
+        )
+        reasons = [reason for reason in reasons if reason != "skip_template"]
 
     return reasons
 
@@ -457,7 +488,54 @@ def _is_story_list_visible(context: Context, image: np.ndarray, param: Dict[str,
             print(f"Story list marker matched: {node}.")
             return True
 
+    if _has_story_info_button_column(image, param):
+        print("Story list marker matched by info-button column.")
+        return True
+
     return False
+
+
+def _has_story_info_button_column(image: np.ndarray, param: Dict[str, Any]) -> bool:
+    hits = 0
+    points = param.get("story_info_button_points") or []
+    crop_size = param.get("story_info_button_crop_size") or [1, 1]
+    min_white = int(param.get("story_info_button_min_white_pixels", 0))
+    min_dark = int(param.get("story_info_button_min_dark_pixels", 0))
+    min_hits = int(param.get("story_info_button_min_hits", 1))
+
+    for index, point in enumerate(points):
+        crop = _center_crop(image, point, crop_size)
+        if crop.ndim < 3 or crop.shape[2] < 3:
+            continue
+
+        pixels = crop[..., :3].astype(np.int16)
+        red, green, blue = pixels[..., 0], pixels[..., 1], pixels[..., 2]
+        max_channel = np.max(pixels, axis=2)
+        min_channel = np.min(pixels, axis=2)
+        white_mask = (min_channel >= 215) & ((max_channel - min_channel) <= 35)
+        dark_mask = (
+            (max_channel <= 170)
+            & (min_channel <= 120)
+            & (np.abs(red - green) <= 45)
+            & (blue >= red - 10)
+        )
+        white_pixels = int(np.count_nonzero(white_mask))
+        dark_pixels = int(np.count_nonzero(dark_mask))
+
+        if white_pixels >= min_white and dark_pixels >= min_dark:
+            hits += 1
+            print(
+                f"Story info button scan row #{index + 1}: hit "
+                f"(white={white_pixels}, dark={dark_pixels})."
+            )
+        else:
+            print(
+                f"Story info button scan row #{index + 1}: miss "
+                f"(white={white_pixels}, dark={dark_pixels})."
+            )
+
+    print(f"Story info button column scan: hits={hits}, required={min_hits}.")
+    return hits >= min_hits
 
 
 def _is_story_detail_visible(context: Context, image: np.ndarray, param: Dict[str, Any]) -> bool:
