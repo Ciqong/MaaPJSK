@@ -87,10 +87,11 @@
             "story_home_after_filter_wait": 1.0,
             "story_home_confirm_retries": 2,
             "story_home_confirm_retry_delay": 0.8,
-            "story_home_card_points": [[405, 360], [350, 505], [350, 620]],
+            "story_home_card_points": [[350, 215], [405, 360], [350, 505], [350, 620]],
             "story_home_card_crop_size": [220, 90],
             "story_home_card_min_std": 18.0,
             "story_home_card_min_mean": 18.0,
+            "story_home_card_click_wait": 0.8,
             "no_unread_stop_node": "StopNoUnreadStory"
         },
         "post_delay": 1000,

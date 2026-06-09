@@ -102,10 +102,11 @@ DEFAULT_PARAM: Dict[str, Any] = {
     "story_home_after_filter_wait": 1.0,
     "story_home_confirm_retries": 2,
     "story_home_confirm_retry_delay": 0.8,
-    "story_home_card_points": [[405, 360], [350, 505], [350, 620]],
+    "story_home_card_points": [[350, 215], [405, 360], [350, 505], [350, 620]],
     "story_home_card_crop_size": [220, 90],
     "story_home_card_min_std": 18.0,
     "story_home_card_min_mean": 18.0,
+    "story_home_card_click_wait": 0.8,
     "no_unread_stop_node": "StopNoUnreadStory",
     "story_list_search_up_begin": [1070, 210],
     "story_list_search_up_end": [1070, 630],
@@ -1099,11 +1100,13 @@ class FindAndReadNextUnreadStory(CustomAction):
                 print(f"No SKIP/unread marker found on visible row #{row_index + 1}; skipping row.")
                 continue
 
+            print(f"Opening readable chapter row #{row_index + 1} at {list(row_point)}.")
             _click(context, row_point)
             time.sleep(float(param["row_click_wait"]))
 
             start_target = _find_story_start_after_row_click(context, param)
             if not start_target:
+                print(f"Readable chapter row #{row_index + 1} did not open a start page.")
                 continue
 
             start_kind, start_box = start_target
@@ -1179,6 +1182,29 @@ class FilterUnreadAndOpenStory(CustomAction):
             return False
 
         time.sleep(float(param["story_home_after_filter_wait"]))
+        image = _screencap(context)
+        if _handle_interruptions(context, image, param):
+            return False
+
+        candidate_indexes = _scan_story_home_candidates(image, param)
+        if not candidate_indexes:
+            print("No unread story remains after applying the unread filter.")
+            stop_node = str(param["no_unread_stop_node"])
+            if not context.override_next(argv.node_name, [stop_node]):
+                print("Failed to override next to the no-unread stop node.")
+                return False
+            return True
+
+        candidate_index = candidate_indexes[0]
+        candidate_point = param["story_home_card_points"][candidate_index]
+        print(
+            "Unread filter found story candidates; "
+            f"selecting row #{candidate_index + 1} at {candidate_point}."
+        )
+        if not _click(context, candidate_point):
+            return False
+
+        time.sleep(float(param.get("story_home_card_click_wait", click_delay)))
         story_hit = None
         for attempt in range(int(param["story_home_confirm_retries"]) + 1):
             image = _screencap(context)
@@ -1192,15 +1218,9 @@ class FilterUnreadAndOpenStory(CustomAction):
             if attempt < int(param["story_home_confirm_retries"]):
                 time.sleep(float(param["story_home_confirm_retry_delay"]))
 
-        _scan_story_home_candidates(image, param)
-
         if not story_hit or not story_hit.box:
-            print("No unread story remains after applying the unread filter.")
-            stop_node = str(param["no_unread_stop_node"])
-            if not context.override_next(argv.node_name, [stop_node]):
-                print("Failed to override next to the no-unread stop node.")
-                return False
-            return True
+            print("Unread story candidate was selected, but the confirm button was not found.")
+            return False
 
-        print("Unread filter applied; opening the selected unread story.")
+        print("Unread story selected; opening it with the confirm button.")
         return _click_box_center(context, story_hit.box)
