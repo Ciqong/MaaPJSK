@@ -114,6 +114,8 @@ DEFAULT_PARAM: Dict[str, Any] = {
     "story_page_back_wait": 1.2,
     "story_detail_back_point": [150, 42],
     "story_detail_back_wait": 1.2,
+    "chapter_list_back_point": [150, 42],
+    "chapter_list_back_wait": 1.2,
     "android_back_key": 4,
     "next_story_checkbox_wait": 0.3,
     "next_story_auto_read_min_markers": 2,
@@ -623,14 +625,23 @@ def _press_back_with_point(
     return True
 
 
+def _return_from_chapter_list_after_reading(context: Context, param: Dict[str, Any]) -> bool:
+    print("Chapter list is visible after reading; returning to the story selection page.")
+    return _press_back_with_point(
+        context,
+        param,
+        param["chapter_list_back_point"],
+        float(param["chapter_list_back_wait"]),
+    )
+
+
 def _ensure_story_list_after_reading(context: Context, param: Dict[str, Any]) -> bool:
     image = _screencap(context)
     if _handle_interruptions(context, image, param):
         image = _screencap(context)
 
     if _is_story_list_visible(context, image, param):
-        print("Chapter list is visible after reading; rescanning this story.")
-        return True
+        return _return_from_chapter_list_after_reading(context, param)
 
     if _is_story_home_visible(context, image, param):
         print("Outer story list is visible after reading; continuing from the story home.")
@@ -655,8 +666,7 @@ def _ensure_story_list_after_reading(context: Context, param: Dict[str, Any]) ->
         image = _screencap(context)
 
     if _is_story_list_visible(context, image, param):
-        print("Returned to chapter list after reading; rescanning this story.")
-        return True
+        return _return_from_chapter_list_after_reading(context, param)
 
     if _is_story_home_visible(context, image, param):
         print("Returned to outer story list after reading; continuing from the story home.")

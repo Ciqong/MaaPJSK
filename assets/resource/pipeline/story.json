@@ -227,6 +227,8 @@
             "story_page_back_wait": 1.2,
             "story_detail_back_point": [150, 42],
             "story_detail_back_wait": 1.2,
+            "chapter_list_back_point": [150, 42],
+            "chapter_list_back_wait": 1.2,
             "android_back_key": 4,
             "skip_color_roi": [-300, -45, 110, 55],
             "skip_color_min_pixels": 800,
